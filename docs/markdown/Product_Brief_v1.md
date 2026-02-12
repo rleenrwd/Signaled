@@ -1,3 +1,9 @@
+### Version: v1
+
+### Project: Signaled
+
+### Phase: SDLC Planning
+
 # Signaled — Product Brief (V1)
 
 ## Project Overview

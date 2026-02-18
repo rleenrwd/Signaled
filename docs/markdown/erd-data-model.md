@@ -201,10 +201,3 @@ Recommended indexes for V1 search/filter performance:
 
 ---
 
-## Files
-
-- Diagram (PNG): `docs/formal/erd-signaled-v1.png`
-- Diagram (PDF): `docs/formal/erd-signaled-v1.pdf`
-
----
-

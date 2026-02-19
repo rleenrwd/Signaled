@@ -1,203 +1,226 @@
-# Signaled — ERD / Data Model (V1)
+# Signaled --- ERD / Data Model (V1)
 
 ## Purpose
 
-This document defines the **data model** for Signaled V1: the core entities (tables/models), key fields, and relationships that support ingestion, event exploration, case investigations, analytics, role-based access, and audit logging.
+This document defines the **relational data model** for Signaled V1: the
+core entities (tables/models), key fields, relationships, and indexing
+considerations that support:
 
-> **Note:** Django provides the base `User` model; Signaled adds role mappings and domain models.
+-   Dataset ingestion
+-   Record exploration (search/filter)
+-   Structured case workflows
+-   Reporting and trend analysis
+-   Role-based access control (RBAC)
+-   Audit logging for accountability
 
----
+> **Note:** ASP.NET Core Identity provides base user and role entities.
+> Signaled adds domain entities for records, cases, tags, and audit
+> history.
+
+------------------------------------------------------------------------
 
 ## Entities (Tables / Models)
 
-### 1) User (Django Auth)
+### 1) ApplicationUser (ASP.NET Core Identity)
+
 Represents authenticated users of the system.
 
-**Key fields (typical):**
-- `id` (PK)
-- `username`
-- `email`
-- `password_hash`
-- `is_active`
-- `is_staff`
-- `date_joined`
+**Key fields (Identity defaults + common extensions):** - `Id` (PK,
+string GUID recommended) - `UserName` - `Email` - `PasswordHash` -
+`EmailConfirmed` - `LockoutEnabled` - `LockoutEnd` (nullable) -
+`AccessFailedCount` - `IsActive` (optional custom flag) - `CreatedAt`
+(optional custom field)
 
----
+**Notes:** - Identity provides strong defaults for authentication and
+account security. - Use `IsActive` if business rules require disabling
+access without deleting accounts.
 
-### 2) Role
+------------------------------------------------------------------------
+
+### 2) ApplicationRole (ASP.NET Core Identity Role)
+
 Defines application roles for RBAC.
 
-**Fields:**
-- `id` (PK)
-- `name` (unique) — `Admin`, `Analyst`, `Viewer`
-- `description` (optional)
-- `created_at`
+**Fields:** - `Id` (PK) - `Name` (unique) --- `Admin`, `Analyst`,
+`Viewer` - `NormalizedName` (Identity default) - `Description` (optional
+custom field) - `CreatedAt` (optional custom field)
 
----
+------------------------------------------------------------------------
 
-### 3) UserRole
-Maps users to roles (supports 1+ roles per user if desired).
+### 3) UserRole (IdentityUserRole)
 
-**Fields:**
-- `id` (PK)
-- `user_id` (FK → `User.id`)
-- `role_id` (FK → `Role.id`)
-- `created_at`
+Maps users to roles (supports one or more roles per user).
 
-**Constraints:**
-- Unique (`user_id`, `role_id`)
+**Fields:** - `UserId` (FK → `ApplicationUser.Id`) - `RoleId` (FK →
+`ApplicationRole.Id`) - `CreatedAt` (optional extension)
 
----
+**Constraints:** - Unique (`UserId`, `RoleId`) (Identity effectively
+enforces uniqueness by key)
 
-### 4) Event
-Core event record stored after ingestion/normalization.
+**Notes:** - In many internal systems, a single primary role is
+sufficient in V1. - Supporting multiple roles is useful for future
+expansion without schema changes.
 
-**Fields (suggested V1):**
-- `id` (PK)
-- `occurred_at` (timestamp, indexed)
-- `ingested_at` (timestamp)
-- `severity` (enum-like string/int, indexed)
-- `component` (string, indexed)
-- `service` (string, indexed; optional but useful)
-- `environment` (string, indexed) — e.g., `prod`, `staging`, `dev`
-- `system_id` (string, indexed) — device/system identifier
-- `event_type` (string, indexed; optional)
-- `message` (text)
-- `raw_payload` (jsonb) — original event JSON (optional but helpful)
-- `fingerprint` (string, indexed) — hash/signature for dedupe/recurrence grouping (optional V1)
+------------------------------------------------------------------------
 
-**Notes:**
-- Use `raw_payload` to preserve original data for debugging/auditability.
-- `fingerprint` enables “top recurring issues” analytics.
+### 4) Event (Operational Record)
 
----
+Core operational record stored after ingestion and normalization.
 
-### 5) Case
-Represents an investigation (incident / analysis thread).
+**Fields (suggested V1):** - `Id` (PK) - `OccurredAt` (datetime2,
+indexed) - `IngestedAt` (datetime2) - `Severity` (nvarchar, indexed) ---
+enum-like string (e.g., `LOW`, `MEDIUM`, `HIGH`) - `Component`
+(nvarchar, indexed) - `Service` (nvarchar, indexed; optional but
+useful) - `Environment` (nvarchar, indexed) --- e.g., `prod`, `staging`,
+`dev` - `SystemId` (nvarchar, indexed) --- device/system identifier -
+`EventType` (nvarchar, indexed; optional) - `Message` (nvarchar(max)) -
+`RawPayload` (nvarchar(max)) --- JSON string of original record
+(optional but helpful) - `Fingerprint` (nvarchar, indexed; optional) ---
+signature/hash for dedupe and recurrence grouping
 
-**Fields:**
-- `id` (PK)
-- `title`
-- `description` (text)
-- `status` (string/choice) — `OPEN`, `INVESTIGATING`, `RESOLVED`
-- `priority` (optional)
-- `created_by_id` (FK → `User.id`)
-- `assigned_to_id` (FK → `User.id`, nullable)
-- `created_at` (timestamp)
-- `updated_at` (timestamp)
+**Notes:** - `RawPayload` preserves the original source record for
+traceability. - `Fingerprint` supports "recurring incident patterns"
+reporting and basic deduping strategies. - Store JSON as nvarchar(max);
+validate JSON format in ingestion service where needed.
 
----
+------------------------------------------------------------------------
+
+### 5) Case (Investigation Record)
+
+Represents a structured investigation workflow.
+
+**Fields:** - `Id` (PK) - `Title` (nvarchar) - `Description`
+(nvarchar(max)) - `Status` (nvarchar) --- `OPEN`, `INVESTIGATING`,
+`RESOLVED` - `Priority` (nullable) --- optional (e.g., `LOW`, `MEDIUM`,
+`HIGH`) - `CreatedById` (FK → `ApplicationUser.Id`) - `AssignedToId` (FK
+→ `ApplicationUser.Id`, nullable) - `CreatedAt` (datetime2) -
+`UpdatedAt` (datetime2)
+
+**Notes:** - `CreatedById` supports accountability for record
+creation. - `AssignedToId` supports workflow ownership, but can remain
+optional in V1.
+
+------------------------------------------------------------------------
 
 ### 6) CaseEvent (Join Table)
+
 Many-to-many relationship between **Case** and **Event**.
 
-**Fields:**
-- `id` (PK)
-- `case_id` (FK → `Case.id`)
-- `event_id` (FK → `Event.id`)
-- `linked_by_id` (FK → `User.id`)
-- `linked_at` (timestamp)
+**Fields:** - `Id` (PK) - `CaseId` (FK → `Case.Id`) - `EventId` (FK →
+`Event.Id`) - `LinkedById` (FK → `ApplicationUser.Id`) - `LinkedAt`
+(datetime2)
 
-**Constraints:**
-- Unique (`case_id`, `event_id`)
+**Constraints:** - Unique (`CaseId`, `EventId`)
 
----
+**Notes:** - This join table allows an Event to be linked to multiple
+Cases if needed. - `LinkedById` supports accountability for
+investigative actions.
+
+------------------------------------------------------------------------
 
 ### 7) CaseNote
-Notes/comments added during an investigation.
 
-**Fields:**
-- `id` (PK)
-- `case_id` (FK → `Case.id`)
-- `author_id` (FK → `User.id`)
-- `content` (text)
-- `created_at` (timestamp)
+Notes added during an investigation.
 
----
+**Fields:** - `Id` (PK) - `CaseId` (FK → `Case.Id`) - `AuthorId` (FK →
+`ApplicationUser.Id`) - `Content` (nvarchar(max)) - `CreatedAt`
+(datetime2)
+
+**Notes:** - Notes provide structured context and supporting information
+for investigations. - Notes can be restricted by role if needed in
+future versions.
+
+------------------------------------------------------------------------
 
 ### 8) Tag
-Reusable tags for categorizing cases (and potentially events later).
 
-**Fields:**
-- `id` (PK)
-- `name` (unique)
-- `created_at`
+Reusable tags for categorizing cases (and possibly records in future
+versions).
 
----
+**Fields:** - `Id` (PK) - `Name` (unique) - `CreatedAt` (datetime2)
+
+------------------------------------------------------------------------
 
 ### 9) CaseTag (Join Table)
+
 Many-to-many relationship between **Case** and **Tag**.
 
-**Fields:**
-- `id` (PK)
-- `case_id` (FK → `Case.id`)
-- `tag_id` (FK → `Tag.id`)
-- `created_at`
+**Fields:** - `Id` (PK) - `CaseId` (FK → `Case.Id`) - `TagId` (FK →
+`Tag.Id`) - `CreatedAt` (datetime2)
 
-**Constraints:**
-- Unique (`case_id`, `tag_id`)
+**Constraints:** - Unique (`CaseId`, `TagId`)
 
----
+------------------------------------------------------------------------
 
 ### 10) AuditLog
-Append-only audit trail for sensitive actions.
 
-**Fields:**
-- `id` (PK)
-- `actor_id` (FK → `User.id`)
-- `action` (string) — e.g., `CASE_CREATED`, `CASE_UPDATED`, `EVENT_LINKED`, `EXPORT_REQUESTED`
-- `target_type` (string) — e.g., `case`, `event`, `user`
-- `target_id` (string/int) — identifier of target object
-- `metadata` (jsonb) — optional details (diff summary, filters used, etc.)
-- `ip_address` (string, optional)
-- `user_agent` (string, optional)
-- `created_at` (timestamp, indexed)
+Append-only audit history for sensitive actions and administrative
+changes.
 
----
+**Fields:** - `Id` (PK) - `ActorId` (FK → `ApplicationUser.Id`) -
+`Action` (nvarchar) --- e.g., `CASE_CREATED`, `CASE_UPDATED`,
+`EVENT_LINKED`, `ROLE_ASSIGNED` - `TargetType` (nvarchar) --- e.g.,
+`Case`, `Event`, `User`, `Role` - `TargetId` (nvarchar) --- identifier
+of target object (string to support multiple entity key types) -
+`Metadata` (nvarchar(max)) --- optional JSON details (diff summary,
+filters used, etc.) - `IpAddress` (nvarchar, optional) - `UserAgent`
+(nvarchar, optional) - `CreatedAt` (datetime2, indexed)
+
+**Notes:** - Audit logs should remain append-only. - Admin retention
+policies may be applied in V2+ if needed.
+
+------------------------------------------------------------------------
 
 ## Relationships (Cardinality)
 
-- **User 1—M Case** (as `created_by`)
-- **User 1—M Case** (as `assigned_to`, optional)
-- **Case M—M Event** via **CaseEvent**
-- **Case 1—M CaseNote**
-- **Case M—M Tag** via **CaseTag**
-- **User M—M Role** via **UserRole**
-- **User 1—M AuditLog** (as `actor`)
+-   **ApplicationUser 1---M Case** (as `CreatedBy`)
+-   **ApplicationUser 1---M Case** (as `AssignedTo`, optional)
+-   **Case M---M Event** via **CaseEvent**
+-   **Case 1---M CaseNote**
+-   **Case M---M Tag** via **CaseTag**
+-   **ApplicationUser M---M ApplicationRole** via **UserRole**
+-   **ApplicationUser 1---M AuditLog** (as `Actor`)
 
----
+------------------------------------------------------------------------
 
 ## Indexing Considerations (Performance)
 
 Recommended indexes for V1 search/filter performance:
 
 ### Event
-- `occurred_at`
-- `severity`
-- `component`
-- `service` (if used)
-- `environment`
-- `system_id`
-- `event_type` (if used)
-- `fingerprint` (if used for recurrence analytics)
 
-> Consider composite indexes later based on real query patterns (e.g., `(environment, occurred_at)`).
+-   `OccurredAt`
+-   `Severity`
+-   `Component`
+-   `Service` (if used)
+-   `Environment`
+-   `SystemId`
+-   `EventType` (if used)
+-   `Fingerprint` (if used for recurrence reporting)
+
+> Consider composite indexes later based on real query patterns (e.g.,
+> `(Environment, OccurredAt)`).
 
 ### AuditLog
-- `created_at`
-- `actor_id` (optional)
+
+-   `CreatedAt`
+-   `ActorId` (optional)
 
 ### CaseEvent
-- Index `case_id` and `event_id` (often added automatically by FK/index defaults)
-- Uniqueness constraint already supports lookup patterns
 
----
+-   Index `CaseId` and `EventId` (often added by FK defaults)
+-   Uniqueness constraint supports common lookup patterns
+
+------------------------------------------------------------------------
 
 ## Data Model Notes (V1 Decisions)
 
-- **Keep Event schema flexible** using `raw_payload (jsonb)` while still normalizing key fields for fast filtering.
-- **Use join tables** (`CaseEvent`, `CaseTag`, `UserRole`) to keep relationships explicit and scalable.
-- **AuditLog is append-only** to preserve integrity of sensitive actions; avoid “update/delete” for audit rows except via admin retention policies (V2+).
+-   **Keep Event schema flexible** by storing `RawPayload` as JSON
+    string while still normalizing key fields for fast filtering.
+-   **Use join tables** (`CaseEvent`, `CaseTag`, `UserRole`) to keep
+    relationships explicit and scalable.
+-   **AuditLog remains append-only** to preserve integrity of sensitive
+    actions; avoid update/delete for audit rows except via retention
+    policies (V2+).
 
----
-
+------------------------------------------------------------------------

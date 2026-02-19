@@ -8,250 +8,300 @@
 
 ## Purpose
 
-This document describes the high-level architecture for **Signaled**, including the major components, data flow, key backend modules, and how the frontend interacts with the API. The goal is to provide a clear blueprint for implementation and support future scaling (V2+).
+This document describes the high-level architecture for **Signaled**,
+including major components, data flow, backend modules, key services,
+and frontend interaction patterns. The goal is to provide a clear
+implementation blueprint using ASP.NET Core Web API and SQL Server,
+while supporting future scalability (V2+).
 
----
+------------------------------------------------------------------------
 
 ## System Summary
 
-**Signaled** is a full-stack internal tool with three major layers:
+**Signaled** is a full-stack internal investigation and reporting
+platform composed of three major layers:
 
-- **Frontend (React):** UI for ingestion, event exploration, case management, and analytics
-- **Backend (Django + DRF):** REST API for ingestion, querying, cases, analytics, auth/RBAC, and auditing
-- **Database (PostgreSQL):** Relational storage for events, cases, user roles, and audit logs
+-   **Frontend (React):** User interface for ingestion, record
+    exploration, structured case management, and reporting dashboards
+-   **Backend (ASP.NET Core Web API):** REST API supporting ingestion,
+    querying, workflow management, reporting endpoints, authentication,
+    role-based access control, and audit logging
+-   **Database (SQL Server):** Relational storage for operational
+    records, investigation cases, user roles, and audit history
 
----
+------------------------------------------------------------------------
 
 ## Architecture Diagram (Conceptual)
 
-User (Browser)
-→ React UI
-→ DRF API (Auth + RBAC)
-→ PostgreSQL
+User (Browser) → React UI → ASP.NET Core Web API (JWT Auth +
+Authorization Policies) → SQL Server
 
 Key flows:
-- Upload CSV/JSON → Ingestion pipeline → Events tables
-- Search/filter events → Query API → Indexed lookups
-- Cases workflow → Case APIs → Case tables + event links
-- Analytics → Aggregation APIs → SQL GROUP BY/time-buckets
-- Sensitive actions → Audit middleware/service → Audit log table
 
----
+-   Upload CSV/JSON → IngestionService → Event tables
+-   Search/filter records → EventsService → Indexed queries
+-   Case workflow → CasesService → Case tables + event relationships
+-   Reporting → AnalyticsService → Aggregation queries (GROUP BY / time
+    buckets)
+-   Sensitive actions → AuditService → AuditLog table
+
+------------------------------------------------------------------------
 
 ## Core Components
 
 ### Frontend (React)
+
 Primary UI areas (V1):
-- **Upload/Ingest:** upload file, show validation results, ingestion summary
-- **Event Explorer:** search, filters, sorting, pagination
-- **Cases:** create/update cases, link/unlink events, notes/tags, status changes
-- **Analytics Dashboard:** KPIs, trends over time, top components/recurring issues
+
+-   **Upload / Ingest:** Upload file, display validation results,
+    ingestion summary
+-   **Event Explorer:** Search, filters, sorting, pagination
+-   **Cases:** Create/update cases, link/unlink records, notes/tags,
+    status transitions
+-   **Reporting Dashboard:** KPIs, trends over time, recurring incident
+    analysis
 
 Frontend responsibilities:
-- Form validation (basic UX validation)
-- Managing auth token/session
-- Calling APIs + rendering server results
-- Client-side state for filters/pagination (server is source of truth)
 
-### Backend (Django + Django REST Framework)
+-   Basic UX validation
+-   Managing authentication token/session
+-   Calling backend APIs
+-   Rendering paginated server results
+-   Maintaining filter/pagination state (server remains source of truth)
+
+------------------------------------------------------------------------
+
+## Backend (ASP.NET Core Web API)
+
 Primary responsibilities:
-- Authentication + role enforcement
-- Data ingestion, validation, normalization
-- Query APIs (filters, sorting, pagination)
-- Case workflow APIs
-- Analytics aggregation APIs
-- Audit logging for sensitive actions
 
-### Database (PostgreSQL)
+-   Authentication and role enforcement (JWT + Identity)
+-   Dataset ingestion, validation, normalization
+-   Record query APIs (filters, sorting, pagination)
+-   Case workflow management APIs
+-   Reporting aggregation endpoints
+-   Audit logging for sensitive actions
+
+Architecture layers:
+
+-   Controllers (HTTP endpoints)
+-   Services (business logic layer)
+-   Data Layer (Entity Framework Core DbContext)
+-   Middleware (error handling and auditing hooks)
+-   Authorization Policies (RBAC enforcement)
+
+------------------------------------------------------------------------
+
+## Database (SQL Server)
+
 Primary responsibilities:
-- Strong relational integrity (FKs, constraints)
-- Query performance (indexes for common filters)
-- Auditability (append-style audit log entries)
 
----
+-   Strong relational integrity (foreign key constraints)
+-   Query performance (indexes on common filters)
+-   Auditability (append-only audit log entries)
+-   Transactional writes for ingestion batches
 
-## Backend Module Layout (Recommended)
+ORM:
 
-Inside `/server/`:
+-   Entity Framework Core (Code-First Migrations)
 
-- `config/` (Django project settings)
-- `apps/`
-  - `accounts/` (users, roles, auth helpers)
-  - `events/` (event model + querying endpoints)
-  - `ingestion/` (upload validation + normalization + load)
-  - `cases/` (case model + linking events + notes/tags)
-  - `analytics/` (aggregation endpoints)
-  - `audit/` (audit log model + audit service/middleware)
+------------------------------------------------------------------------
+
+## Backend Project Structure (Recommended)
+
+Inside `/Server/Signaled.Api/`:
+
+Controllers/ Services/ Models/ DTOs/ Data/ Middleware/ Auth/
+
+Logical service areas:
+
+-   AccountsService (users, roles, authentication helpers)
+-   EventsService (record storage + querying logic)
+-   IngestionService (upload validation + normalization + load)
+-   CasesService (case lifecycle + linking records + notes/tags)
+-   AnalyticsService (reporting and aggregation logic)
+-   AuditService (audit logging logic)
 
 Reasoning:
-- Keeps boundaries clear
-- Makes it easy to expand features by app
-- Supports “internal platform” style architecture
 
----
+-   Clear separation of concerns
+-   Structured maintainability
+-   Supports feature expansion without controller bloat
+
+------------------------------------------------------------------------
 
 ## Data Flow
 
-### 1) Ingestion Flow (CSV/JSON Upload → Stored Events)
+### 1) Ingestion Flow (CSV/JSON Upload → Stored Records)
 
-1. User uploads CSV/JSON via React UI
-2. Frontend sends file to DRF endpoint (multipart/form-data or JSON payload)
-3. Backend performs:
-   - file/type detection (csv/json)
-   - schema validation (required fields, types, allowed values)
-   - normalization (timestamps, severity mapping, env normalization, trimming)
-   - deduping strategy (V1 can be “best-effort”)
-4. Backend writes valid events to `events_event` (and related tables if needed)
-5. Backend returns ingestion summary:
-   - total rows
-   - inserted
-   - rejected
-   - rejection reasons (top N)
+1.  User uploads CSV/JSON via React UI
+2.  Frontend sends file to POST /api/ingestion
+3.  Backend performs:
+    -   File type detection
+    -   Schema validation (required fields, types, allowed values)
+    -   Normalization (timestamp formatting, severity mapping, trimming)
+    -   Deduplication strategy (best-effort in V1)
+4.  Backend writes valid records using EF Core within a transaction
+5.  Backend returns ingestion summary:
+    -   Total rows
+    -   Inserted
+    -   Rejected
+    -   Rejection reasons
 
-**V1 note:** ingestion is synchronous unless file sizes require async later (V2 could use Celery/RQ).
+V1: Synchronous ingestion
+V2: Background processing via HostedService or job scheduler
 
-### 2) Event Search + Filter Flow
+------------------------------------------------------------------------
 
-1. User selects filters in Event Explorer
-2. Frontend calls `GET /api/events?...` with query params
-3. Backend builds a queryset with filters + ordering
-4. DRF returns paginated results:
-   - `count`, `next`, `previous`
-   - `results[]`
+### 2) Record Search + Filter Flow
+
+1.  User selects filters in Event Explorer
+2.  Frontend calls GET /api/events with query parameters
+3.  Controller passes filters to EventsService
+4.  LINQ queries applied with pagination
+5.  API returns paginated response:
+    -   count
+    -   page
+    -   pageSize
+    -   results\[\]
 
 Performance expectations:
-- DB indexes on frequently filtered fields (timestamp, severity, component, env, device/system id)
-- Pagination required for stable UI and DB load control
+
+-   Indexed fields: timestamp, severity, component, environment, system
+    ID
+-   Pagination required for UI stability and database load control
+
+------------------------------------------------------------------------
 
 ### 3) Case Investigation Flow
 
-1. User creates a Case (title, description, status=Open)
-2. User links selected events to the case
-3. User updates:
-   - status transitions (Open → Investigating → Resolved)
-   - notes
-   - tags
-4. Backend enforces role permissions and writes audit entries for sensitive actions
+1.  User creates a Case (title, description, status=OPEN)
+2.  User links selected records to the case (many-to-many)
+3.  User updates:
+    -   Status transitions (OPEN → INVESTIGATING → RESOLVED)
+    -   Notes
+    -   Tags
+4.  Backend enforces authorization policies
+5.  AuditService logs sensitive actions
 
-### 4) Analytics Flow
+------------------------------------------------------------------------
 
-1. Frontend calls analytics endpoints (date range required)
-2. Backend runs SQL aggregations:
-   - events/day (time bucket)
-   - top components (count)
-   - severity distribution
-   - recurring issues (group by signature fields)
-3. Backend returns ready-to-chart payloads
+### 4) Reporting Flow
 
----
+1.  Frontend calls reporting endpoints (date range required)
+2.  Backend runs SQL aggregation queries:
+    -   Records per day (time bucket)
+    -   Top components
+    -   Severity distribution
+    -   Recurring incident patterns (group by fingerprint/signature)
+3.  API returns chart-ready payloads
+
+------------------------------------------------------------------------
 
 ## Authentication & Authorization
 
-### Auth (V1)
-Start with one approach (recommended: JWT for simplicity):
-- Login endpoint returns access token
-- Frontend stores token (prefer memory; localStorage only if necessary)
-- Token included in `Authorization: Bearer <token>`
+### Authentication (V1)
 
-### RBAC (Role-Based Access Control)
+-   JWT-based authentication
+-   Login endpoint returns access token
+-   Token included in Authorization header
+
+### Role-Based Access Control (RBAC)
+
 Roles:
-- **Admin:** manage users/roles, view all, export, admin-only endpoints
-- **Analyst:** full workflow access (events, cases, analytics)
-- **Viewer:** read-only (events + analytics), limited case visibility if desired
 
-Enforcement points:
-- DRF permission classes per endpoint
-- Object-level checks where needed (e.g., case access rules)
+-   Admin
+-   Analyst
+-   Viewer
 
----
+Enforcement:
+
+-   ASP.NET Core \[Authorize\] attributes
+-   Policy-based authorization
+-   Resource-level checks where required
+
+------------------------------------------------------------------------
 
 ## Audit Logging
 
-### What gets audited (V1)
-Sensitive actions:
-- Viewing/exporting case details (if defined as sensitive)
-- Creating/updating/deleting cases
-- Linking/unlinking events to cases
-- Status changes
-- Role/user changes (admin actions)
+### Audited Actions (V1)
 
-### How auditing works
-- Audit log model: append-only entries
-- Central audit helper/service called by views/serializers
-- Include:
-  - actor user id
-  - action type
-  - target type/id (case/event/etc.)
-  - timestamp
-  - metadata (diff summary, endpoint, ip/user agent if desired)
+-   Creating/updating/deleting cases
+-   Linking/unlinking records
+-   Status changes
+-   Role/user modifications
+-   Sensitive exports (if implemented)
+
+### Audit Implementation
+
+AuditLog table (append-only):
+
+-   UserId
+-   ActionType
+-   TargetType
+-   TargetId
+-   Timestamp
+-   Metadata (diff summary, endpoint, optional IP)
 
 Goal:
-- Traceability + accountability similar to internal tools
 
----
+-   Traceability
+-   Accountability
+-   Structured internal governance standards
+
+------------------------------------------------------------------------
 
 ## API Design Principles (V1)
 
-- RESTful resources:
-  - `/events`
-  - `/cases`
-  - `/cases/{id}/events` (link/unlink)
-  - `/analytics/*`
-  - `/auth/*`
-  - `/audit/*` (admin)
-- Pagination for list endpoints
-- Query parameters for filtering and sorting
-- Consistent error shape for validation failures (especially ingestion)
+-   RESTful resources:
+    -   /api/events
+    -   /api/cases
+    -   /api/cases/{id}/events
+    -   /api/analytics
+    -   /api/auth
+    -   /api/audit (admin)
+-   Pagination for list endpoints
+-   Query parameters for filtering and sorting
+-   Consistent error response structure
+-   DTOs separate from EF entities
 
----
-
-## Frontend Architecture (React)
-
-Recommended structure:
-- `pages/` (EventExplorerPage, CaseDetailPage, AnalyticsPage, UploadPage)
-- `components/` (FilterBar, EventTable, CaseForm, Charts, etc.)
-- `api/` (axios/fetch wrappers)
-- `auth/` (token handling, route guards)
-- `state/` (optional; context or lightweight store)
-
-Key UX principles:
-- Filters drive URL query params (shareable + debuggable)
-- Server is source of truth for results
-- Clear ingestion error reporting (top failures + downloadable rejection report later)
-
----
+------------------------------------------------------------------------
 
 ## Non-Functional Requirements
 
 ### Reliability
-- Clear validation and safe failure modes for ingestion
-- Defensive handling for malformed CSV/JSON
-- Transactional writes for ingestion batches when appropriate
+
+-   Clear validation and safe ingestion failure modes
+-   Defensive handling for malformed CSV/JSON
+-   Transactional writes for ingestion batches
 
 ### Performance
-- Indexed fields for search filters
-- Pagination mandatory
-- Analytics endpoints scoped by time range
+
+-   Indexed search fields
+-   Pagination mandatory
+-   Reporting endpoints scoped by time range
 
 ### Security
-- Auth required for all endpoints except login
-- RBAC enforced at API layer
-- Audit logging for sensitive actions
+
+-   Authentication required for all endpoints except login
+-   RBAC enforced at API layer
+-   Audit logging for sensitive actions
 
 ### Maintainability
-- App-based module boundaries
-- Service/helper layer for ingestion + auditing
-- Consistent serializers and validation rules
 
----
+-   Layered architecture
+-   Service-based business logic
+-   Consistent DTO mapping
+-   EF Core migrations versioned in source control
+
+------------------------------------------------------------------------
 
 ## Versioning & Future Enhancements (V2+)
 
-Possible next steps after V1:
-- Saved views for Event Explorer
-- Async ingestion (Celery/RQ) for large datasets
-- Export features (CSV export for cases/events)
-- Advanced recurring issue detection (signatures/heuristics)
-- Real-time/stream ingestion (Kafka-like simulation)
-- Richer permissions (team/project scoping)
-- Observability (structured logs, metrics)
+-   Saved views for Event Explorer
+-   Async ingestion pipeline
+-   Export features (CSV export for cases/events)
+-   Advanced recurring pattern detection
+-   Real-time ingestion simulation
+-   Richer permission scoping (teams/projects)
+-   Observability (structured logs, metrics, tracing)

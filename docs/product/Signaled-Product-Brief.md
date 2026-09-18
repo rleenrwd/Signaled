@@ -1,6 +1,6 @@
 # Signaled — Product Brief
 
-**Document Status:** Draft  
+**Document Status:** Approved for MVP  
 **Date:** September 12, 2026
 
 ---

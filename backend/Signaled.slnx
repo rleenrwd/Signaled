@@ -5,4 +5,7 @@
     <Project Path="src/Signaled.Domain/Signaled.Domain.csproj" />
     <Project Path="src/Signaled.Infrastructure/Signaled.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Signaled.Domain.Tests/Signaled.Domain.Tests.csproj" />
+  </Folder>
 </Solution>

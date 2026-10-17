@@ -32,8 +32,8 @@ public sealed class Event
 
     public EventStatus Status { get; private set; }
 
-
-    private Event() // Private constructor prevents other classes from calling new Event() directly (they can't instantiate an object instance of the Event class directly)
+    // Private constructor prevents other classes from calling new Event() directly (they can't instantiate an object instance of the Event class directly, they must use the CreateDraft func instead).
+    private Event()
     {
         
     }

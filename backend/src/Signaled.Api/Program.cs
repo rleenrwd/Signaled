@@ -1,23 +1,26 @@
+using Microsoft.EntityFrameworkCore;
+using Signaled.Infrastructure.Persistence;
+
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(); // Registers services that generate the API Documentation.
+
+builder.Services.AddDbContext<SignaledDbContext>(options => options.UseSqlServer(
+    builder.Configuration.GetConnectionString("Signaled") ?? throw new InvalidOperationException(
+        "The Signaled connection string is missing."
+    )
+));
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi(); // Exposes the generated OpenAPI document at /openapi/v1.json
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();

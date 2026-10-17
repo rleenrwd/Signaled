@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Signaled.Domain.Tests/Signaled.Domain.Tests.csproj" />
+    <Project Path="tests/Signaled.Infrastructure.Tests/Signaled.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>

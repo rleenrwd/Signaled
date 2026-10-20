@@ -22,6 +22,8 @@ namespace Signaled.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasSequence("EventNumberSequence");
+
             modelBuilder.Entity("Signaled.Domain.Events.Event", b =>
                 {
                     b.Property<Guid>("Id")

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Signaled.Infrastructure.Persistence;
+using Signaled.Application.Events;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,8 @@ builder.Services.AddDbContext<SignaledDbContext>(options => options.UseSqlServer
         "The Signaled connection string is missing."
     )
 ));
+
+builder.Services.AddScoped<IEventDraftStore, EventDraftStore>();
 
 var app = builder.Build();
 

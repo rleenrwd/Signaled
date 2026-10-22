@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Signaled.Domain.Events;
+using Signaled.Infrastructure.Persistence;
 using Xunit;
 
 namespace Signaled.Infrastructure.Tests.Events;
@@ -150,6 +151,22 @@ public class EventPersistenceTests : IClassFixture<SqlServerFixture> // xUnit in
         Assert.Equal("First user's update", savedEvent.Title);
     }
 
+    [Fact]
+    public async Task GenerateAsync_ReturnsDistinctFormattedEventNumbers()
+    {
+        // ARRANGE
+        await using var context = _fixture.CreateContext();
 
+        var generator = new EventNumberGenerator(context);
+
+        // ACT
+        string firstNumber = await generator.GenerateAsync();
+        string secondNumber = await generator.GenerateAsync();
+
+        // ASSERT
+        Assert.Matches(@"^EVT-\d{4,}$", firstNumber);
+        Assert.Matches(@"^EVT-\d{4,}$", secondNumber);
+        Assert.NotEqual(firstNumber, secondNumber);
+    }
 
 }

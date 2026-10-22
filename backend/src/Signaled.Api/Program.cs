@@ -15,6 +15,7 @@ builder.Services.AddDbContext<SignaledDbContext>(options => options.UseSqlServer
 ));
 
 builder.Services.AddScoped<IEventDraftStore, EventDraftStore>();
+builder.Services.AddScoped<IEventNumberGenerator, EventNumberGenerator>();
 
 var app = builder.Build();
 

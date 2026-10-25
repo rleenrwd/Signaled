@@ -16,6 +16,8 @@ builder.Services.AddDbContext<SignaledDbContext>(options => options.UseSqlServer
 
 builder.Services.AddScoped<IEventDraftStore, EventDraftStore>();
 builder.Services.AddScoped<IEventNumberGenerator, EventNumberGenerator>();
+builder.Services.AddScoped<CreateEventDraftService>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 
 var app = builder.Build();
 

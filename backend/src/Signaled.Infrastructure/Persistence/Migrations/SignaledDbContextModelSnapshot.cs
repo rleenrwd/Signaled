@@ -88,6 +88,73 @@ namespace Signaled.Infrastructure.Persistence.Migrations
 
                     b.ToTable("Events", (string)null);
                 });
+
+            modelBuilder.Entity("Signaled.Domain.Identity.UserAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("nvarchar(254)");
+
+                    b.Property<string>("IdentityProviderSubject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("LastSignInAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ManagerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdentityProviderSubject")
+                        .IsUnique();
+
+                    b.HasIndex("ManagerUserId");
+
+                    b.ToTable("UserAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("Signaled.Domain.Identity.UserAccount", b =>
+                {
+                    b.HasOne("Signaled.Domain.Identity.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ManagerUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
 #pragma warning restore 612, 618
         }
     }

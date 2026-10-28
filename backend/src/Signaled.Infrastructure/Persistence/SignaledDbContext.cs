@@ -13,7 +13,18 @@ public class SignaledDbContext : DbContext
     }
 
     public DbSet<Event> Events {get;set;}
+
     public DbSet<UserAccount> UserAccounts {get;set;}
+
+    public DbSet<Role> Roles { get; set; }
+
+    public DbSet<Permission> Permissions { get; set; }
+
+    public DbSet<RolePermission> RolePermissions { get; set; }
+
+    public DbSet<UserRole> UserRoles { get; set; }
+
+    public DbSet<UserPermission> UserPermissions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,5 +33,15 @@ public class SignaledDbContext : DbContext
         new EventEntityTypeConfiguration().Configure(modelBuilder.Entity<Event>());
 
         new UserAccountEntityTypeConfiguration().Configure(modelBuilder.Entity<UserAccount>());
+
+        new RoleEntityTypeConfiguration().Configure(modelBuilder.Entity<Role>());
+
+        new PermissionEntityTypeConfiguration().Configure(modelBuilder.Entity<Permission>());
+
+        new RolePermissionEntityTypeConfiguration().Configure(modelBuilder.Entity<RolePermission>());
+
+        new UserRoleEntityTypeConfiguration().Configure(modelBuilder.Entity<UserRole>());
+
+        new UserPermissionEntityTypeConfiguration().Configure(modelBuilder.Entity<UserPermission>());
     }  
 }
